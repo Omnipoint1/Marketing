@@ -1,0 +1,85 @@
+import { useState, useEffect } from "react";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { useRouter } from "next/router";
+
+export default function CanvassingMap() {
+  const [addresses, setAddresses] = useState([]);
+  const [search, setSearch] = useState("");
+  const [filteredAddresses, setFilteredAddresses] = useState([]);
+  const [apiKey, setApiKey] = useState("");
+  const [user, setUser] = useState(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    // Fetch API key from environment variables
+    fetch("/api/env")
+      .then((res) => res.json())
+      .then((data) => setApiKey(data.MAPS_API_KEY));
+  }, []);
+
+  useEffect(() => {
+    // Fetch authenticated user
+    fetch("/api/auth/me", { credentials: "include" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.user) {
+          setUser(data.user);
+        } else {
+          router.push("/login");
+        }
+      });
+  }, []);
+
+  useEffect(() => {
+    // Fetch preloaded Selma, AL addresses with lat/lng
+    if (apiKey && user) {
+      fetch("/api/addresses", {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      })
+        .then((res) => res.json())
+        .then((data) => setAddresses(data));
+    }
+  }, [apiKey, user]);
+
+  useEffect(() => {
+    setFilteredAddresses(
+      addresses.filter((addr) =>
+        addr.street.toLowerCase().includes(search.toLowerCase())
+      )
+    );
+  }, [search, addresses]);
+
+  return (
+    <div className="p-4">
+      <img src="/assets/TheO-Trans.png" alt="Omnipoint Technology Logo" className="w-40 mx-auto mb-4" />
+      <h1 className="text-2xl font-bold mb-4 text-center">Omnipoint Technology Canvassing Map</h1>
+      {user && <p className="text-center">Welcome, {user.name}</p>}
+      <Input
+        placeholder="Search street names..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
+      <MapContainer center={[32.407, -87.021]} zoom={13} className="h-96 w-full mt-4">
+        <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        {filteredAddresses.map((addr, idx) => (
+          <Marker key={idx} position={[addr.lat, addr.lng]}>
+            <Popup>
+              <strong>{addr.street}</strong>
+              <br /> {addr.city}, {addr.state} {addr.zip}
+            </Popup>
+          </Marker>
+        ))}
+      </MapContainer>
+    </div>
+  );
+}
+
+// Vercel Configuration for Deployment
+export const config = {
+  runtime: "edge",
+};
